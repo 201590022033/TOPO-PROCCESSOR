@@ -1,0 +1,20 @@
+import assert from "node:assert/strict";
+import { currentApplicationCorneaExample } from "../shared/clinical/cornea-data.example";
+import { buildGullstrandReferenceEye } from "../shared/geometry/eye/gullstrand-reference";
+import { buildPatientEye, keratometricPowerToRadiusMm } from "../shared/geometry/eye/patient-eye-builder";
+
+const reference = buildGullstrandReferenceEye();
+const p = reference.positionsMm;
+const near = (actual: number, expected: number) => assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} is not approximately ${expected}`);
+assert.equal(reference.surfaces.anteriorCornea.signedRadiusMm, 7.7);
+assert.equal(reference.cornealThicknessMm, 0.5);
+assert.equal(reference.surfaces.posteriorCornea.signedRadiusMm, 6.8);
+assert.equal(p.posteriorCornea, 0.5); assert.equal(p.anteriorLens, 3.6); near(p.anteriorNucleus, 4.146); near(p.posteriorNucleus, 6.565); near(p.posteriorLens, 7.2); near(p.imagePlane, 24.385);
+assert.equal(reference.media.cornea, 1.376); assert.equal(reference.media.aqueous, 1.336); assert.equal(reference.media.lensShell, 1.386); assert.equal(reference.media.lensNucleus, 1.406); assert.equal(reference.media.vitreous, 1.336);
+assert.equal(reference.provenance.origin, "reference"); assert.equal(reference.surfaces.anteriorCornea.provenance.origin, "reference"); assert.equal(reference.modelKind, "reference");
+assert.equal(reference.coordinateSystem.units, "mm"); for (const value of Object.values(p)) assert.ok(Number.isFinite(value));
+assert.equal(keratometricPowerToRadiusMm(45), 7.5); assert.throws(() => keratometricPowerToRadiusMm(0)); assert.throws(() => keratometricPowerToRadiusMm(-1)); assert.throws(() => keratometricPowerToRadiusMm(Number.NaN));
+const patient = buildPatientEye(currentApplicationCorneaExample);
+assert.equal(patient.modelKind, "patient"); assert.equal(patient.laterality, "UNKNOWN"); assert.ok(patient.anteriorCornea); assert.equal(patient.anteriorCornea!.principalRadius1Mm.sourcePowerD, 44.25); assert.equal(patient.anteriorCornea!.principalRadius2Mm.sourcePowerD, 43.1); assert.equal(patient.anteriorCornea!.orientation.status, "unavailable"); assert.equal(patient.components.anteriorCornea.status, "partial"); assert.equal(patient.components.posteriorCornea.status, "unavailable"); assert.equal(patient.biometry.axialLength.status, "unavailable"); assert.equal(patient.components.lens.status, "unavailable"); assert.equal(patient.provenance.origin, "derived");
+assert.deepEqual(JSON.parse(JSON.stringify(patient)), patient); assert.notEqual(JSON.stringify(reference), JSON.stringify(patient));
+console.log("Eye geometry tests passed (27 assertions).");
