@@ -10,3 +10,4 @@ The adapter can currently populate only a provisional subset: laterality when su
 
 The eventual `CorneaData` contract must carry explicit units, coordinate system, laterality, provenance, validity, and distinguish numeric maps from PNG display artifacts. Surface elevation Zernikes must remain a separate domain from wavefront OPD Zernikes.
 
+The contract is now defined at `shared/clinical/cornea-data.ts`; see `docs/data-contracts/CORNEA_DATA.md`. No production adapter is implemented yet.
