@@ -10,3 +10,4 @@ The current topography contract can resolve patient anterior principal radii fro
 
 Geometry primitives are points, vectors, spherical/conic descriptions, sampled-surface references, and landmarks. No triangle meshes are generated. Future viewer adapters may sample these descriptions.
 
+M4 comparison and preview layers remain separate from patient truth; see `docs/architecture/EYE_COMPARISON_AND_PREVIEW.md`.
