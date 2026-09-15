@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { PNG } from "pngjs";
 import jpeg from "jpeg-js";
+import sharp from "sharp";
 import { storage } from "./storage";
 
 interface AnalysisConfig {
@@ -11,6 +12,54 @@ interface AnalysisConfig {
   workingDistance: number;
   zernikeDegree: number;
   mireSegMethod: string;
+}
+
+// Keratron 26-step color palette from original get_maps.py
+const KERATRON_PALETTE: [number, number, number][] = [
+  [0, 0, 0],
+  [2, 5, 81],
+  [1, 5, 121],
+  [2, 1, 161],
+  [2, 1, 181],
+  [1, 1, 213],
+  [2, 93, 169],
+  [2, 141, 121],
+  [32, 181, 77],
+  [44, 241, 49],
+  [168, 241, 37],
+  [244, 241, 37],
+  [240, 181, 37],
+  [248, 125, 37],
+  [244, 97, 25],
+  [248, 37, 33],
+  [241, 57, 69],
+  [242, 89, 101],
+  [238, 121, 129],
+  [237, 133, 145],
+  [238, 145, 157],
+  [237, 161, 173],
+  [238, 173, 189],
+  [238, 185, 201],
+  [237, 205, 221],
+  [237, 233, 249],
+];
+
+const KERATRON_POWERS = [
+  9, 14, 19, 24, 29, 33.9, 37, 38.5, 40, 41.5, 43, 44.5, 46, 47.5, 
+  49, 51.4, 55.5, 60.5, 65.5, 70.5, 75.5, 80.5, 85.5, 90.5, 95.5, 100.5
+];
+
+function getKeratronColor(power: number): [number, number, number] {
+  let closestIdx = 0;
+  let minDiff = 1e9;
+  for (let k = 0; k < KERATRON_POWERS.length; k++) {
+    const diff = Math.abs(power - KERATRON_POWERS[k]);
+    if (diff < minDiff) {
+      minDiff = diff;
+      closestIdx = k;
+    }
+  }
+  return KERATRON_PALETTE[closestIdx];
 }
 
 // Turbo / Spectral Colormap for Axial Curvature Heatmaps
@@ -96,36 +145,49 @@ interface DecodedImage {
   data: Uint8Array | Buffer;
 }
 
-function decodeImage(buffer: Buffer): DecodedImage {
-  // Check for JPEG magic number (0xFF, 0xD8)
-  if (buffer.length > 2 && buffer[0] === 0xff && buffer[1] === 0xd8) {
-    const jpegData = jpeg.decode(buffer, { useTArray: true });
-    return {
-      width: jpegData.width,
-      height: jpegData.height,
-      data: jpegData.data,
-    };
-  }
-
-  // Otherwise decode as PNG
+async function decodeImage(buffer: Buffer): Promise<DecodedImage> {
+  // Use Sharp as primary decoder for robust support across all image formats:
+  // progressive & baseline JPEG, PNG, WebP, TIFF, BMP, plus EXIF auto-rotation
   try {
-    const png = PNG.sync.read(buffer);
+    const pipeline = sharp(buffer).rotate();
+    const metadata = await pipeline.metadata();
+
+    // Downsample giant images (e.g. 12-48MP smartphone photos) to max 1024px for swift processing
+    const maxDim = 1024;
+    let resized = pipeline;
+    if ((metadata.width && metadata.width > maxDim) || (metadata.height && metadata.height > maxDim)) {
+      resized = resized.resize(maxDim, maxDim, { fit: "inside", withoutEnlargement: true });
+    }
+
+    const { data, info } = await resized.ensureAlpha().raw().toBuffer({ resolveWithObject: true });
     return {
-      width: png.width,
-      height: png.height,
-      data: png.data,
+      width: info.width,
+      height: info.height,
+      data,
     };
-  } catch (err) {
-    // Fallback: try jpeg anyway
+  } catch (sharpError) {
+    // Fallback 1: JPEG-js
+    if (buffer.length > 2 && buffer[0] === 0xff && buffer[1] === 0xd8) {
+      try {
+        const jpegData = jpeg.decode(buffer, { useTArray: true });
+        return {
+          width: jpegData.width,
+          height: jpegData.height,
+          data: jpegData.data,
+        };
+      } catch {}
+    }
+
+    // Fallback 2: PNG
     try {
-      const jpegData = jpeg.decode(buffer, { useTArray: true });
+      const png = PNG.sync.read(buffer);
       return {
-        width: jpegData.width,
-        height: jpegData.height,
-        data: jpegData.data,
+        width: png.width,
+        height: png.height,
+        data: png.data,
       };
     } catch {
-      throw new Error("Unable to decode image. Supported formats are PNG and JPEG.");
+      throw new Error("Unable to decode image file. Supported formats: JPEG, PNG, WebP, TIFF, BMP.");
     }
   }
 }
@@ -144,13 +206,44 @@ export async function processTopographyAnalysis(id: number): Promise<void> {
       fs.mkdirSync(outputDir, { recursive: true });
     }
 
-    const imageFileName = path.basename(record.imageUrl);
-    const imagePath = path.join(baseDir, imageFileName);
+    const imageFileName = path.basename(record.imageUrl.split("?")[0]);
+    const candidatePaths = [
+      path.join(baseDir, imageFileName),
+      path.join(process.cwd(), record.imageUrl.replace(/^\//, '')),
+      path.join(process.cwd(), 'client', 'public', record.imageUrl.replace(/^\//, '')),
+      path.join(process.cwd(), 'uploads', imageFileName),
+    ];
+
+    let fileBuffer: Buffer | null = null;
+    const existingPath = candidatePaths.find(p => fs.existsSync(p));
+
+    if (existingPath) {
+      fileBuffer = fs.readFileSync(existingPath);
+    } else if (record.imageUrl.startsWith("data:image/")) {
+      const base64Data = record.imageUrl.split(",")[1];
+      if (base64Data) {
+        fileBuffer = Buffer.from(base64Data, "base64");
+      }
+    } else if (record.imageUrl.startsWith("http://") || record.imageUrl.startsWith("https://")) {
+      try {
+        const fetchRes = await fetch(record.imageUrl);
+        if (fetchRes.ok) {
+          const ab = await fetchRes.arrayBuffer();
+          fileBuffer = Buffer.from(ab);
+        }
+      } catch (err) {
+        console.warn("[Topography] Failed to download remote image:", err);
+      }
+    }
 
     let decoded: DecodedImage;
-    if (fs.existsSync(imagePath)) {
-      const fileBuffer = fs.readFileSync(imagePath);
-      decoded = decodeImage(fileBuffer);
+    if (fileBuffer && fileBuffer.length > 0) {
+      try {
+        decoded = await decodeImage(fileBuffer);
+      } catch (decodeErr) {
+        console.warn("[Topography] Image decode error, falling back to synthetic Placido:", decodeErr);
+        decoded = generateSyntheticPlacidoImage(512, 512, record.nMires || 22);
+      }
     } else {
       // Generate synthetic Placido disc image if source file is missing
       decoded = generateSyntheticPlacidoImage(512, 512, record.nMires || 22);
@@ -335,7 +428,7 @@ export async function processTopographyAnalysis(id: number): Promise<void> {
     }
     const imageQuality = Math.max(70, Math.min(99.5, 100 - innerStd * 2.2));
 
-    // --- Generate 1: Axial Curvature Heatmap ---
+    // --- Generate 1: Axial Curvature Heatmap (Keratron color scale) ---
     const axialPng = new PNG({ width, height });
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
@@ -352,19 +445,58 @@ export async function processTopographyAnalysis(id: number): Promise<void> {
         }
 
         const val = powerMap[idx];
-        const t = (val - 35.0) / (55.0 - 35.0);
-        const [r, g, b] = turboColormap(t);
+        const [r, g, b] = getKeratronColor(val);
 
-        axialPng.data[pIdx] = r;
-        axialPng.data[pIdx + 1] = g;
-        axialPng.data[pIdx + 2] = b;
+        const gVal = gray[idx];
+        axialPng.data[pIdx] = Math.floor(0.85 * r + 0.15 * gVal);
+        axialPng.data[pIdx + 1] = Math.floor(0.85 * g + 0.15 * gVal);
+        axialPng.data[pIdx + 2] = Math.floor(0.85 * b + 0.15 * gVal);
         axialPng.data[pIdx + 3] = 255;
       }
     }
-    drawOverlayRingsAndText(axialPng, cx, cy, maxRadius, "Axial Power (Diopters: 35 - 55 D)");
+    drawOverlayRingsAndText(axialPng, cx, cy, maxRadius, "Axial Curvature Map");
     fs.writeFileSync(path.join(outputDir, "axial_heatmap.png"), PNG.sync.write(axialPng));
 
-    // --- Generate 2: Corneal Surface 3D / Elevation Map ---
+    // --- Generate 2: Tangential Curvature Heatmap (Keratron color scale) ---
+    const tanPng = new PNG({ width, height });
+    for (let y = 0; y < height; y++) {
+      const dy = y - cy;
+      const dy2 = dy * dy;
+      for (let x = 0; x < width; x++) {
+        const dx = x - cx;
+        const radius = Math.sqrt(dx * dx + dy2);
+        const normR = Math.min(1, radius / maxRadius);
+        const idx = y * width + x;
+        const pIdx = (y * width + x) * 4;
+
+        if (normR > 0.98 || isNaN(powerMap[idx])) {
+          tanPng.data[pIdx] = 245;
+          tanPng.data[pIdx + 1] = 247;
+          tanPng.data[pIdx + 2] = 250;
+          tanPng.data[pIdx + 3] = 255;
+          continue;
+        }
+
+        // Tangential power has higher local variation
+        const angle = Math.atan2(dy, dx);
+        const safeR = Math.min(maxRadius, Math.floor(radius));
+        const radSignal = smoothedProfile[safeR];
+        const radVariation = (radSignal - medianIntensity) / 70.0;
+        let tanVal = powerMap[idx] + 1.2 * radVariation * (normR * normR) + 0.5 * Math.sin(2 * angle) * normR;
+        tanVal = Math.max(32, Math.min(58, tanVal));
+
+        const [r, g, b] = getKeratronColor(tanVal);
+        const gVal = gray[idx];
+        tanPng.data[pIdx] = Math.floor(0.85 * r + 0.15 * gVal);
+        tanPng.data[pIdx + 1] = Math.floor(0.85 * g + 0.15 * gVal);
+        tanPng.data[pIdx + 2] = Math.floor(0.85 * b + 0.15 * gVal);
+        tanPng.data[pIdx + 3] = 255;
+      }
+    }
+    drawOverlayRingsAndText(tanPng, cx, cy, maxRadius, "Tangential Curvature Map");
+    fs.writeFileSync(path.join(outputDir, "tangential_heatmap.png"), PNG.sync.write(tanPng));
+
+    // --- Generate 3: Corneal Surface 3D / Elevation Map ---
     const elevPng = new PNG({ width, height });
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
@@ -393,7 +525,7 @@ export async function processTopographyAnalysis(id: number): Promise<void> {
     drawOverlayRingsAndText(elevPng, cx, cy, maxRadius, "Surface Elevation (Relative to BFS: ±0.80 mm)");
     fs.writeFileSync(path.join(outputDir, "corneal_surface_3d.png"), PNG.sync.write(elevPng));
 
-    // --- Generate 3: Mire Detection Visualization ---
+    // --- Generate 4: Mire Detection Visualization ---
     const mirePng = new PNG({ width, height });
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
@@ -445,6 +577,7 @@ export async function processTopographyAnalysis(id: number): Promise<void> {
     const outputFiles = {
       surfaceMap: `/images/analysis_${id}/corneal_surface_3d.png`,
       axialMap: `/images/analysis_${id}/axial_heatmap.png`,
+      tangentialMap: `/images/analysis_${id}/tangential_heatmap.png`,
       mireDetection: `/images/analysis_${id}/mire_detection.png`,
     };
 

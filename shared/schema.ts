@@ -1,10 +1,10 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 // === TABLE DEFINITIONS ===
-export const analysis = pgTable("analysis", {
-  id: serial("id").primaryKey(),
+export const analysis = sqliteTable("analysis", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
   imageUrl: text("image_url").notNull(),
   status: text("status").notNull().default("pending"), // pending, processing, completed, failed
   // Configuration parameters matches python argparse
@@ -16,11 +16,11 @@ export const analysis = pgTable("analysis", {
   mireSegMethod: text("mire_seg_method").notNull().default("dl"), // assuming dl as default from imports
   
   // Results
-  results: jsonb("results"), // for numerical metrics like simK, astigmatism
-  outputFiles: jsonb("output_files"), // for paths to generated plots
+  results: text("results", { mode: "json" }).$type<Record<string, any>>(), // numerical metrics like simK, astigmatism
+  outputFiles: text("output_files", { mode: "json" }).$type<Record<string, any>>(), // paths to generated plots
   errorMessage: text("error_message"),
   
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 });
 
 // === SCHEMAS ===

@@ -76,7 +76,12 @@ export function useUploadFile() {
       });
 
       if (!res.ok) {
-        throw new Error("File upload failed");
+        let errorMsg = "File upload failed";
+        try {
+          const errorJson = await res.json();
+          if (errorJson?.message) errorMsg = errorJson.message;
+        } catch {}
+        throw new Error(errorMsg);
       }
       return api.upload.create.responses[201].parse(await res.json());
     },

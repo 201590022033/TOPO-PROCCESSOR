@@ -46,11 +46,12 @@ export function FileUpload({ value, onUploadComplete }: FileUploadProps) {
   };
 
   const processFile = async (file: File) => {
-    if (!file.type.startsWith("image/")) {
+    const isImage = file.type.startsWith("image/") || /\.(jpe?g|png|webp|bmp|tif|tiff)$/i.test(file.name);
+    if (!isImage) {
       toast({
         variant: "destructive",
         title: "Invalid file type",
-        description: "Please upload an image file (JPEG, PNG).",
+        description: "Please upload an image file (JPEG, PNG, WebP, TIFF, BMP).",
       });
       return;
     }
@@ -66,12 +67,12 @@ export function FileUpload({ value, onUploadComplete }: FileUploadProps) {
         title: "Upload successful",
         description: "Image ready for analysis.",
       });
-    } catch (error) {
+    } catch (error: any) {
       setPreview(null);
       toast({
         variant: "destructive",
         title: "Upload failed",
-        description: "Could not upload the image. Please try again.",
+        description: error?.message || "Could not upload the image. Please try again.",
       });
     }
   };
@@ -130,7 +131,7 @@ export function FileUpload({ value, onUploadComplete }: FileUploadProps) {
             ref={inputRef}
             type="file"
             className="hidden"
-            accept="image/*"
+            accept="image/*,.jpg,.jpeg,.png,.webp,.bmp,.tif,.tiff"
             onChange={handleChange}
           />
           
@@ -143,7 +144,7 @@ export function FileUpload({ value, onUploadComplete }: FileUploadProps) {
                 Click to upload or drag and drop
               </p>
               <p className="text-sm text-muted-foreground mt-1">
-                SVG, PNG, JPG or GIF (max. 10MB)
+                JPEG, PNG, WebP, TIFF, BMP (up to 50MB)
               </p>
             </div>
           </div>

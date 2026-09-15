@@ -122,9 +122,67 @@ export default function NewAnalysis() {
 
             <div className="mt-6 pt-6 border-t border-slate-100">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-                Or choose a sample Placido disc image:
+                Or select a clinical reference dataset:
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onUploadComplete("/images/nokc_right.jpg");
+                    form.setValue("nMires", 22);
+                    form.setValue("workingDistance", 75);
+                    form.setValue("mireSegMethod", "dl");
+                  }}
+                  className={cn(
+                    "flex items-center gap-3 p-3 text-left rounded-xl border transition-all",
+                    uploadedUrl === "/images/nokc_right.jpg"
+                      ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                      : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                  )}
+                >
+                  <img
+                    src="/images/nokc_right.jpg"
+                    alt="Reference OD"
+                    className="w-12 h-12 rounded-lg object-cover bg-slate-900 border border-slate-200 shrink-0"
+                  />
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm font-semibold text-slate-900 truncate">Reference OD (nokc_right)</p>
+                      <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 shrink-0">OD</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate">Normal cornea baseline dataset</p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    onUploadComplete("/images/nokc_left.jpg");
+                    form.setValue("nMires", 22);
+                    form.setValue("workingDistance", 75);
+                    form.setValue("mireSegMethod", "dl");
+                  }}
+                  className={cn(
+                    "flex items-center gap-3 p-3 text-left rounded-xl border transition-all",
+                    uploadedUrl === "/images/nokc_left.jpg"
+                      ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                      : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                  )}
+                >
+                  <img
+                    src="/images/nokc_left.jpg"
+                    alt="Reference OS"
+                    className="w-12 h-12 rounded-lg object-cover bg-slate-900 border border-slate-200 shrink-0"
+                  />
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm font-semibold text-slate-900 truncate">Reference OS (nokc_left)</p>
+                      <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 shrink-0">OS</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate">Contralateral normal cornea</p>
+                  </div>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => {
@@ -144,9 +202,9 @@ export default function NewAnalysis() {
                     alt="Normal Placido"
                     className="w-12 h-12 rounded-lg object-cover bg-slate-900 border border-slate-200 shrink-0"
                   />
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">Standard Normal Cornea</p>
-                    <p className="text-xs text-muted-foreground">22 concentric regular mires</p>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-slate-900 truncate">Synthetic Normal</p>
+                    <p className="text-xs text-muted-foreground truncate">22 concentric regular mires</p>
                   </div>
                 </button>
 
@@ -169,9 +227,9 @@ export default function NewAnalysis() {
                     alt="Keratoconus Placido"
                     className="w-12 h-12 rounded-lg object-cover bg-slate-900 border border-slate-200 shrink-0"
                   />
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">Keratoconus Screening</p>
-                    <p className="text-xs text-muted-foreground">Astigmatic mire distortion</p>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-slate-900 truncate">Keratoconus Screening</p>
+                    <p className="text-xs text-muted-foreground truncate">Astigmatic mire distortion</p>
                   </div>
                 </button>
               </div>

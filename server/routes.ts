@@ -3,23 +3,20 @@ import type { Server } from "http";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import sharp from "sharp";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import express from 'express';
 import { PNG } from "pngjs";
 import { processTopographyAnalysis, generateSyntheticPlacidoImage } from "./topography_processor";
+import { ensureAllReferenceDatasets } from "./generate_reference_data";
 
-// Setup multer for file uploads
+// Setup multer with memory storage for zero-disk-conflict, high-performance uploads
 const upload = multer({ 
-  dest: 'uploads/',
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
 });
-
-// Create uploads directory if it doesn't exist
-if (!fs.existsSync('uploads')) {
-  fs.mkdirSync('uploads');
-}
 
 // Ensure public/images exists for serving processed images
 const publicImagesDir = path.join(process.cwd(), 'client', 'public', 'images');
@@ -27,8 +24,14 @@ if (!fs.existsSync(publicImagesDir)) {
   fs.mkdirSync(publicImagesDir, { recursive: true });
 }
 
-// Seed sample Placido images if missing
-function ensureSamplePlacidoImages() {
+// Seed sample Placido images and clinical reference datasets if missing
+async function ensureSamplePlacidoImages() {
+  try {
+    await ensureAllReferenceDatasets();
+  } catch (err) {
+    console.error("Error ensuring reference datasets:", err);
+  }
+
   const normalPath = path.join(publicImagesDir, "sample_placido_normal.png");
   const kcPath = path.join(publicImagesDir, "sample_placido_keratoconus.png");
 
@@ -45,9 +48,12 @@ function ensureSamplePlacidoImages() {
     png.data = Buffer.from(kc.data);
     fs.writeFileSync(kcPath, PNG.sync.write(png));
   }
-  const output1 = path.join(publicImagesDir, "analysis_1");
-  if (!fs.existsSync(output1)) {
-    processTopographyAnalysis(1).catch((err) => console.error("Initial analysis generation error:", err));
+  const normalRecord = await storage.getAnalysisByImageUrl("/images/sample_placido_normal.png");
+  if (normalRecord) {
+    const outputTan = path.join(publicImagesDir, `analysis_${normalRecord.id}`, "tangential_heatmap.png");
+    if (!fs.existsSync(outputTan)) {
+      processTopographyAnalysis(normalRecord.id).catch((err) => console.error("Initial analysis generation error:", err));
+    }
   }
 }
 ensureSamplePlacidoImages();
@@ -60,26 +66,44 @@ export async function registerRoutes(
   app.use('/images', express.static(path.join(process.cwd(), 'client', 'public', 'images')));
 
   // === FILE UPLOAD ===
-  app.post(api.upload.create.path, upload.single('file'), (req, res) => {
-    if (!req.file) {
-      return res.status(400).json({ message: 'No file uploaded' });
+  app.post(api.upload.create.path, (req, res, next) => {
+    upload.single('file')(req, res, (err) => {
+      if (err instanceof multer.MulterError) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(400).json({ message: 'File is too large. Maximum supported image size is 50MB.' });
+        }
+        return res.status(400).json({ message: `Upload error: ${err.message}` });
+      } else if (err) {
+        return res.status(400).json({ message: `Upload failed: ${err.message}` });
+      }
+      next();
+    });
+  }, async (req, res) => {
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({ message: 'No file uploaded or file is empty' });
     }
 
-    if (!req.file.mimetype.startsWith("image/")) {
-      fs.rmSync(req.file.path, { force: true });
-      return res.status(400).json({ message: 'Only image files are supported' });
+    const isImageMime = req.file.mimetype.startsWith("image/");
+    const isImageExt = /\.(jpe?g|png|webp|bmp|tif|tiff|gif)$/i.test(req.file.originalname);
+    if (!isImageMime && !isImageExt) {
+      return res.status(400).json({ message: 'Only image files (JPEG, PNG, WebP, TIFF, BMP) are supported' });
     }
 
-    // Keep the original extension for image decoders and remove path segments
-    // from user-provided filenames before moving the upload.
     const safeOriginalName = path.basename(req.file.originalname).replace(/[^a-zA-Z0-9._-]/g, "_");
     const filename = `${Date.now()}_${safeOriginalName}`;
     const targetPath = path.join(publicImagesDir, filename);
-    
-    fs.renameSync(req.file.path, targetPath);
-    
+
+    try {
+      // Auto-orient and normalize image to ensure corruption-free format
+      await sharp(req.file.buffer)
+        .rotate()
+        .toFile(targetPath);
+    } catch {
+      // Fallback: write raw uploaded buffer directly to disk
+      fs.writeFileSync(targetPath, req.file.buffer);
+    }
+
     const url = `/images/${filename}`;
-    
     res.status(201).json({ url, filename });
   });
 
@@ -143,14 +167,28 @@ export async function registerRoutes(
   app.get("/api/samples", (_req, res) => {
     res.json([
       {
-        name: "Standard Placido Disc (Normal Cornea)",
-        url: "/images/sample_placido_normal.png",
-        description: "Regular concentric Placido mires, 22 rings, normal asphericity.",
+        name: "Clinical Reference OD: nokc_right.jpg (Normal Right Eye)",
+        url: "/images/nokc_right.jpg",
+        description: "Standard reference cornea dataset (OD) with concentric mires and ~38.7D average keratometry.",
+        isReference: true,
       },
       {
-        name: "Keratoconus Placido Disc (Inferior Steepening)",
+        name: "Clinical Reference OS: nokc_left.jpg (Normal Left Eye)",
+        url: "/images/nokc_left.jpg",
+        description: "Standard reference cornea dataset (OS) with symmetric regular astigmatic distribution.",
+        isReference: true,
+      },
+      {
+        name: "Standard Placido Disc (Synthetic Normal Cornea)",
+        url: "/images/sample_placido_normal.png",
+        description: "Regular concentric Placido mires, 22 rings, normal asphericity.",
+        isReference: false,
+      },
+      {
+        name: "Keratoconus Screening Disc (Inferior Steepening)",
         url: "/images/sample_placido_keratoconus.png",
-        description: "Irregular mire compression and paracentral steepening.",
+        description: "Irregular mire compression and paracentral keratoconic steepening.",
+        isReference: false,
       },
     ]);
   });

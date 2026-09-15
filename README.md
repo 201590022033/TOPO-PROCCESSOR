@@ -1,7 +1,7 @@
 # OculoMetrics
 
 OculoMetrics is a web app for reviewing Placido-disc corneal topography
-images. It uploads an image, stores an analysis record in PostgreSQL, runs a
+images. It uploads an image, stores an analysis record in a local SQLite database, runs a
 local Python/OpenCV worker, and presents generated exploratory maps and image
 derived metrics.
 
@@ -10,14 +10,12 @@ derived metrics.
 
 ## Run locally
 
-1. Make sure Node.js 20, Python 3.11+, and PostgreSQL are available.
-2. Set `DATABASE_URL` and `SESSION_SECRET` in the environment.
-3. Install JavaScript dependencies with `npm install`.
-4. Install Python dependencies with `uv sync` (or use the Replit package setup).
-5. Create/update the database schema with `npm run db:push`.
-6. Start the app with `npm run dev`.
+1. Make sure Node.js 20 and Python 3.11+ are available.
+2. Install JavaScript dependencies with `npm install`.
+3. Install Python dependencies with `uv sync` (or use the system package setup).
+4. Start the app with `npm run dev`. The local SQLite database (`./data/topo-processor.db`) initializes automatically.
 
-The server runs on port `5000` by default. The Python worker is launched from
+The server runs on port `3000` (or `PORT` configured in environment). The Python worker is launched from
 `.pythonlibs/bin/python` when that environment exists, and otherwise falls
 back to `python3`.
 

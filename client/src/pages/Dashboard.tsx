@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Layout } from "@/components/Layout";
 import { useAnalyses } from "@/hooks/use-analysis";
 import { Link } from "wouter";
@@ -8,6 +9,19 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function Dashboard() {
   const { data: analyses, isLoading, isError } = useAnalyses();
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const filteredAnalyses = analyses?.filter((a) => {
+    if (!searchTerm.trim()) return true;
+    const term = searchTerm.toLowerCase();
+    const note = (a.results as any)?.analysisNote ? String((a.results as any).analysisNote).toLowerCase() : "";
+    return (
+      a.id.toString().includes(term) ||
+      a.status.toLowerCase().includes(term) ||
+      a.imageUrl.toLowerCase().includes(term) ||
+      note.includes(term)
+    );
+  });
 
   return (
     <Layout>
@@ -53,6 +67,8 @@ export default function Dashboard() {
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input 
                 placeholder="Search..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-9 pr-4 py-1.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 w-48 transition-all"
               />
             </div>
@@ -93,9 +109,19 @@ export default function Dashboard() {
               </button>
             </Link>
           </div>
+        ) : filteredAnalyses?.length === 0 ? (
+          <div className="p-12 text-center flex flex-col items-center">
+            <p className="text-muted-foreground">No analyses found matching "{searchTerm}".</p>
+            <button
+              onClick={() => setSearchTerm("")}
+              className="mt-3 text-sm text-primary font-medium hover:underline"
+            >
+              Clear filter
+            </button>
+          </div>
         ) : (
           <div className="divide-y divide-slate-100">
-            {analyses?.map((analysis) => (
+            {filteredAnalyses?.map((analysis) => (
               <Link key={analysis.id} href={`/analysis/${analysis.id}`}>
                 <div className="p-4 hover:bg-slate-50 transition-colors duration-150 cursor-pointer group flex items-center gap-4">
                   {/* Thumbnail Placeholder - would be the image if we had secure url */}
