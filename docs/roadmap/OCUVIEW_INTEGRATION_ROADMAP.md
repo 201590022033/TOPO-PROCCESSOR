@@ -7,7 +7,7 @@ These are proposed future milestones; none are started here.
 3. M2 — Topography adapter that maps only verified current outputs (complete; normalized output is parallel and not persisted).
 4. M3 — Patient biometric eye model and explicit laterality transforms (complete; viewer transforms remain future work).
 5. M4 — Reference versus patient geometry separation/comparison (complete; numeric surface differences remain unavailable).
-6. M5 — Numeric topography/tomography anterior/posterior surface import.
+6. M5 — Numeric topography/tomography anterior/posterior surface import (complete: Gate C + Gate D no-go; evidence and calibration recovery required).
 7. M6 — Fundus registration and landmark contract.
 8. M7 — Wavefront OPD contract and optical propagation, separate from surface elevation.
 9. M8 — Ray tracing and PSF analysis.

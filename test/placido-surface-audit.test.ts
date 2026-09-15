@@ -1,0 +1,21 @@
+import assert from "node:assert/strict";
+import { currentApplicationCorneaExample } from "../shared/clinical/cornea-data.example";
+import { parseCorneaData } from "../shared/clinical/cornea-data";
+import { toCorneaData } from "../shared/clinical/adapters/current-topography-adapter";
+
+const result = toCorneaData({ simK1: 44.25, simK2: 43.10, astigmatism: 1.15, eccentricity: 0.421, imageQuality: 98.4, ringsDetected: 22, centerX: 256, centerY: 256 });
+assert.equal(result.quality.score.value, 98.4);
+assert.equal(result.quality.score.status, "available");
+assert.equal(result.keratometry.K1.value?.unit, "D");
+assert.equal(result.landmarks.imageCentre.value?.unit, "px");
+assert.equal(result.landmarks.imageCentre.value?.x, 256);
+assert.equal(result.coordinateSystem.kind, "pixel");
+assert.equal(result.coordinateSystem.handedness, "unknown");
+assert.equal(result.keratometry.axis.status, "unavailable");
+assert.equal(result.anteriorSurface.status, "unavailable");
+assert.equal(result.posteriorSurface.status, "unavailable");
+assert.equal(result.pachymetry.status, "unavailable");
+assert.equal(currentApplicationCorneaExample.anteriorSurface.status, "unavailable");
+assert.throws(() => parseCorneaData({ ...result, anteriorSurface: { status: "available", value: { image: "corneal_surface_3d.png" } } }));
+assert.match(result.provenance.algorithm ?? "", /topography_processor/);
+console.log("Placido surface evidence-gate tests passed (14 assertions).");
