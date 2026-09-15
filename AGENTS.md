@@ -10,4 +10,4 @@
 - Keep wavefront OPD Zernikes separate from physical corneal-surface elevation.
 - Changes to clinical behavior require regression tests.
 - Do not hide safety, quality, or diagnostic limitations.
-
+- Follow `docs/DEVELOPMENT_VALIDATION.md` before integration work.
