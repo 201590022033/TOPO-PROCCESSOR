@@ -4,7 +4,7 @@ These are proposed future milestones; none are started here.
 
 1. M0 — Repository audit and explicit data/coordinate contracts (complete).
 2. M1 — Versioned normalized `CorneaData` contract with provenance and quality (complete).
-3. M2 — Topography adapter that maps only verified current outputs.
+3. M2 — Topography adapter that maps only verified current outputs (complete; normalized output is parallel and not persisted).
 4. M3 — Patient biometric eye model and explicit laterality transforms.
 5. M4 — Reference versus patient geometry separation/comparison.
 6. M5 — Numeric topography/tomography anterior/posterior surface import.

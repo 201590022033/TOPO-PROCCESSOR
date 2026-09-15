@@ -4,6 +4,7 @@ import { PNG } from "pngjs";
 import jpeg from "jpeg-js";
 import sharp from "sharp";
 import { storage } from "./storage";
+import { toCorneaData } from "@shared/clinical/adapters/current-topography-adapter";
 
 interface AnalysisConfig {
   startAngle: number;
@@ -573,6 +574,9 @@ export async function processTopographyAnalysis(id: number): Promise<void> {
       workingDistance: record.workingDistance,
       analysisNote: "Exploratory Placido-disc corneal topography and curvature reconstruction.",
     };
+
+    // Parallel normalized output proof; legacy persistence and UI result shape remain unchanged.
+    toCorneaData(results, { sourceId: String(id) });
 
     const outputFiles = {
       surfaceMap: `/images/analysis_${id}/corneal_surface_3d.png`,
