@@ -5,6 +5,7 @@ import jpeg from "jpeg-js";
 import sharp from "sharp";
 import { storage } from "./storage";
 import { toCorneaData } from "@shared/clinical/adapters/current-topography-adapter";
+import { createRadialPlacidoObservation } from "@shared/clinical/placido/placido-observation";
 
 interface AnalysisConfig {
   startAngle: number;
@@ -329,6 +330,9 @@ export async function processTopographyAnalysis(id: number): Promise<void> {
         ringRadii.push(Math.round(i * step));
       }
     }
+
+    // Parallel uncalibrated observation boundary; no legacy output or persistence change.
+    createRadialPlacidoObservation(width, height, cx, cy, ringRadii);
 
     // Median profile intensity
     const sortedProfile = Array.from(smoothedProfile).sort((a, b) => a - b);
