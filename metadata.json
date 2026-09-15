@@ -1,0 +1,6 @@
+{
+  "name": "TOPO-PROCESSOR",
+  "description": "Corneal topography processor and Placido disc analysis application",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

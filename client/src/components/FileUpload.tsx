@@ -5,15 +5,18 @@ import { useUploadFile } from "@/hooks/use-analysis";
 import { useToast } from "@/hooks/use-toast";
 
 interface FileUploadProps {
+  value?: string;
   onUploadComplete: (url: string) => void;
 }
 
-export function FileUpload({ onUploadComplete }: FileUploadProps) {
+export function FileUpload({ value, onUploadComplete }: FileUploadProps) {
   const [dragActive, setDragActive] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const uploadMutation = useUploadFile();
   const { toast } = useToast();
+
+  const activePreview = value || preview;
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -81,10 +84,10 @@ export function FileUpload({ onUploadComplete }: FileUploadProps) {
 
   return (
     <div className="w-full">
-      {preview ? (
+      {activePreview ? (
         <div className="relative rounded-xl overflow-hidden border border-border bg-white shadow-sm group">
           <img 
-            src={preview} 
+            src={activePreview} 
             alt="Upload preview" 
             className="w-full h-64 object-contain bg-slate-50"
           />

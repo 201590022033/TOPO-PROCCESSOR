@@ -118,7 +118,64 @@ export default function NewAnalysis() {
               <Microscope className="w-5 h-5 text-primary" />
               Source Image
             </h2>
-            <FileUpload onUploadComplete={onUploadComplete} />
+            <FileUpload value={uploadedUrl} onUploadComplete={onUploadComplete} />
+
+            <div className="mt-6 pt-6 border-t border-slate-100">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                Or choose a sample Placido disc image:
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onUploadComplete("/images/sample_placido_normal.png");
+                    form.setValue("nMires", 22);
+                    form.setValue("mireSegMethod", "dl");
+                  }}
+                  className={cn(
+                    "flex items-center gap-3 p-3 text-left rounded-xl border transition-all",
+                    uploadedUrl === "/images/sample_placido_normal.png"
+                      ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                      : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                  )}
+                >
+                  <img
+                    src="/images/sample_placido_normal.png"
+                    alt="Normal Placido"
+                    className="w-12 h-12 rounded-lg object-cover bg-slate-900 border border-slate-200 shrink-0"
+                  />
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">Standard Normal Cornea</p>
+                    <p className="text-xs text-muted-foreground">22 concentric regular mires</p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    onUploadComplete("/images/sample_placido_keratoconus.png");
+                    form.setValue("nMires", 24);
+                    form.setValue("mireSegMethod", "dl");
+                  }}
+                  className={cn(
+                    "flex items-center gap-3 p-3 text-left rounded-xl border transition-all",
+                    uploadedUrl === "/images/sample_placido_keratoconus.png"
+                      ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                      : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                  )}
+                >
+                  <img
+                    src="/images/sample_placido_keratoconus.png"
+                    alt="Keratoconus Placido"
+                    className="w-12 h-12 rounded-lg object-cover bg-slate-900 border border-slate-200 shrink-0"
+                  />
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">Keratoconus Screening</p>
+                    <p className="text-xs text-muted-foreground">Astigmatic mire distortion</p>
+                  </div>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 

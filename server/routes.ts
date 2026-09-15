@@ -7,7 +7,8 @@ import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import express from 'express';
-import { execFileSync, spawn } from "child_process";
+import { PNG } from "pngjs";
+import { processTopographyAnalysis, generateSyntheticPlacidoImage } from "./topography_processor";
 
 // Setup multer for file uploads
 const upload = multer({ 
@@ -25,6 +26,31 @@ const publicImagesDir = path.join(process.cwd(), 'client', 'public', 'images');
 if (!fs.existsSync(publicImagesDir)) {
   fs.mkdirSync(publicImagesDir, { recursive: true });
 }
+
+// Seed sample Placido images if missing
+function ensureSamplePlacidoImages() {
+  const normalPath = path.join(publicImagesDir, "sample_placido_normal.png");
+  const kcPath = path.join(publicImagesDir, "sample_placido_keratoconus.png");
+
+  if (!fs.existsSync(normalPath)) {
+    const normal = generateSyntheticPlacidoImage(512, 512, 22);
+    const png = new PNG({ width: normal.width, height: normal.height });
+    png.data = Buffer.from(normal.data);
+    fs.writeFileSync(normalPath, PNG.sync.write(png));
+  }
+
+  if (!fs.existsSync(kcPath)) {
+    const kc = generateSyntheticPlacidoImage(512, 512, 24);
+    const png = new PNG({ width: kc.width, height: kc.height });
+    png.data = Buffer.from(kc.data);
+    fs.writeFileSync(kcPath, PNG.sync.write(png));
+  }
+  const output1 = path.join(publicImagesDir, "analysis_1");
+  if (!fs.existsSync(output1)) {
+    processTopographyAnalysis(1).catch((err) => console.error("Initial analysis generation error:", err));
+  }
+}
+ensureSamplePlacidoImages();
 
 export async function registerRoutes(
   httpServer: Server,
@@ -113,116 +139,25 @@ export async function registerRoutes(
     }
   });
 
+  // === SAMPLE IMAGES ===
+  app.get("/api/samples", (_req, res) => {
+    res.json([
+      {
+        name: "Standard Placido Disc (Normal Cornea)",
+        url: "/images/sample_placido_normal.png",
+        description: "Regular concentric Placido mires, 22 rings, normal asphericity.",
+      },
+      {
+        name: "Keratoconus Placido Disc (Inferior Steepening)",
+        url: "/images/sample_placido_keratoconus.png",
+        description: "Irregular mire compression and paracentral steepening.",
+      },
+    ]);
+  });
+
   return httpServer;
 }
 
 async function processAnalysis(id: number) {
-  try {
-    await storage.updateAnalysisStatus(id, 'processing');
-    
-    const analysis = await storage.getAnalysis(id);
-    if (!analysis) return;
-
-    // Use absolute paths for the python script and directories
-    const pythonScript = path.join(process.cwd(), 'server', 'python_analysis', 'main.py');
-    const baseDir = path.join(process.cwd(), 'client', 'public', 'images');
-    const outputDir = path.join(process.cwd(), 'client', 'public', 'images', `analysis_${id}`);
-    
-    if (!fs.existsSync(outputDir)) {
-      fs.mkdirSync(outputDir, { recursive: true });
-    }
-
-    const args = [
-      pythonScript,
-      '--image_name', path.basename(analysis.imageUrl),
-      '--base_dir', baseDir,
-      '--start_angle', analysis.startAngle.toString(),
-      '--end_angle', analysis.endAngle.toString(),
-      '--n_mires', analysis.nMires.toString(),
-      '--working_distance', analysis.workingDistance.toString(),
-      '--zernike_degree', analysis.zernikeDegree.toString(),
-      '--mire_seg_method', analysis.mireSegMethod,
-      '--mire_loc_method', 'radial_scan', // Default
-      '--output_dir', outputDir
-    ];
-
-    // Replit's Python module exposes the installed packages to python3 via
-    // sitecustomize. The uv-created .pythonlibs binary can be a different
-    // Python minor version, so prefer the runtime that matches the Nix stack.
-    const pythonExecutable = 'python3';
-    const pythonEnv: NodeJS.ProcessEnv = { ...process.env, PYTHONUNBUFFERED: "1" };
-    try {
-      // Wheels installed through uv need the C++ runtime explicitly exposed in
-      // Replit's Nix shell. Keep this lookup dynamic because Nix store paths
-      // change when the toolchain is refreshed.
-      const libstdcPath = execFileSync("gcc", ["-print-file-name=libstdc++.so.6"], {
-        encoding: "utf8",
-      }).trim();
-      if (path.isAbsolute(libstdcPath)) {
-        pythonEnv.LD_LIBRARY_PATH = [
-          process.env.PYTHON_LD_LIBRARY_PATH,
-          process.env.REPLIT_LD_LIBRARY_PATH,
-          path.dirname(libstdcPath),
-          process.env.LD_LIBRARY_PATH,
-        ].filter(Boolean).join(":");
-      }
-    } catch {
-      // The system Python may already have a working native runtime.
-    }
-    const pythonProcess = spawn(pythonExecutable, args, {
-      cwd: process.cwd(),
-      env: pythonEnv,
-    });
-    let output = '';
-    let errorOutput = '';
-    let settled = false;
-
-    pythonProcess.stdout.on('data', (data) => {
-      output += data.toString();
-    });
-
-    pythonProcess.stderr.on('data', (data) => {
-      errorOutput += data.toString();
-    });
-
-    pythonProcess.on('error', async (error) => {
-      if (settled) return;
-      settled = true;
-      await storage.updateAnalysisStatus(id, 'failed', undefined, undefined, `Could not start Python analysis: ${error.message}`);
-    });
-
-    pythonProcess.on('close', async (code) => {
-      if (settled) return;
-      settled = true;
-      if (code !== 0) {
-        const details = errorOutput.trim() || output.trim() || `process exited with code ${code}`;
-        console.error(`Python process failed with code ${code}: ${details}`);
-        await storage.updateAnalysisStatus(id, 'failed', undefined, undefined, `Python error: ${details}`);
-        return;
-      }
-
-      // Parse output for RESULTS: prefix
-      const resultsMatch = output.match(/RESULTS:({.*})/);
-      let results = {};
-      if (resultsMatch) {
-        try {
-          results = JSON.parse(resultsMatch[1]);
-        } catch (e) {
-          console.error("Failed to parse results JSON", e);
-        }
-      }
-
-      const outputFiles = {
-        surfaceMap: `/images/analysis_${id}/corneal_surface_3d.png`,
-        axialMap: `/images/analysis_${id}/axial_heatmap.png`,
-        mireDetection: `/images/analysis_${id}/mire_detection.png`,
-      };
-
-      await storage.updateAnalysisStatus(id, 'completed', results, outputFiles);
-    });
-    
-  } catch (error) {
-    console.error("Analysis failed:", error);
-    await storage.updateAnalysisStatus(id, 'failed', undefined, undefined, String(error));
-  }
+  await processTopographyAnalysis(id);
 }
