@@ -1,0 +1,4 @@
+{
+  "status": "UNKNOWN",
+  "reason": "Camera intrinsics, distortion, and camera-to-target geometry not supplied"
+}

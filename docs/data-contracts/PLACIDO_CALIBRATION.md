@@ -6,3 +6,4 @@ The contract also defines boundaries for a future forward model (known surface +
 
 `KnownSphere.radius` is fundamental physical geometry in `mm`. Optional dioptres require an explicit convention; M6 does not silently apply keratometry. Synthetic 7.0, 7.5, 8.0, and 9.0 mm sphere fixtures are test objects only.
 
+M6.5 extends this into an evidence package with `MEASURED`, `MANUFACTURER_SPECIFIED`, `DERIVED`, and `UNKNOWN` statuses. The repository package under `calibration/` is currently unknown-only and cannot satisfy `CorneaData.anteriorSurface`.

@@ -4,13 +4,14 @@ import { provenanceSchema, type Provenance } from "../provenance";
 
 const positiveMm = z.object({ value: z.number().finite().positive(), unit: z.literal("mm") });
 const availability = <T extends z.ZodTypeAny>(schema: T) => clinicalAvailabilitySchema(schema);
+const targetGeometry = z.object({ targetType: z.enum(["flat-disc", "conical", "cylindrical-conical", "other", "unknown"]), rings: z.array(z.object({ ringNumber: z.number().int().positive(), radiusMm: z.number().finite().positive(), axialPositionMm: z.number().finite().optional() })), centralApertureMm: z.number().finite().nonnegative().optional() });
 export const knownSphereSchema = z.object({ radius: positiveMm, curvature: availability(z.object({ value: z.number().finite(), unit: z.literal("D"), convention: z.string().min(1) })), provenance: provenanceSchema });
 export type KnownSphere = z.infer<typeof knownSphereSchema>;
 
 export const placidoCalibrationSchema = z.object({
   schemaVersion: z.literal("1.0"),
   provenance: provenanceSchema,
-  device: z.object({ ringCount: availability(z.number().int().positive()), ringRadii: availability(z.array(positiveMm)), targetGeometry: availability(z.string().min(1)), cameraToTarget: availability(z.string().min(1)), opticalAxis: availability(z.string().min(1)) }),
+  device: z.object({ ringCount: availability(z.number().int().positive()), ringRadii: availability(z.array(positiveMm)), targetGeometry: availability(targetGeometry), cameraToTarget: availability(z.string().min(1)), opticalAxis: availability(z.string().min(1)) }),
   camera: z.object({ imageDimensions: availability(z.object({ widthPx: z.number().int().positive(), heightPx: z.number().int().positive() })), principalPoint: availability(z.object({ x: z.number().finite(), y: z.number().finite(), unit: z.literal("px") })), focalLength: availability(positiveMm), distortionModel: availability(z.string().min(1)) }),
   acquisition: z.object({ workingDistance: availability(positiveMm), alignment: availability(z.string().min(1)), referenceCenter: availability(z.object({ x: z.number().finite(), y: z.number().finite(), unit: z.literal("px") })) }),
   calibrationSurface: availability(knownSphereSchema),
@@ -27,4 +28,3 @@ export type CalibrationResult = { schemaVersion: "1.0"; solvedParameters: Record
 export function syntheticSphereFixture(radiusMm: 7 | 7.5 | 8 | 9): KnownSphere {
   return { radius: { value: radiusMm, unit: "mm" }, curvature: { status: "unavailable", reason: "not specified for test fixture" }, provenance: { origin: "reference", sourceModality: "synthetic calibration sphere fixture", algorithm: "M6 test harness", algorithmVersion: "1.0", sourceId: `synthetic-sphere-${radiusMm}mm` } };
 }
-

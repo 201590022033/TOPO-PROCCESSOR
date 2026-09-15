@@ -1,0 +1,7 @@
+{
+  "schemaVersion": "1.0",
+  "objectType": "physical calibration eye",
+  "surfaceType": "unknown",
+  "radiusMm": { "status": "UNKNOWN", "reason": "Owner has not supplied certified radius" },
+  "provenance": "repository evidence package placeholder; no measurement claimed"
+}
